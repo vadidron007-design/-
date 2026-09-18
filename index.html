@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Расписание УИФ</title>
+
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    background:#f4f6f8;
+    color:#202124;
+}
+
+header{
+    background:#fff;
+    padding:20px;
+    text-align:center;
+    border-bottom:1px solid #ddd;
+    position:sticky;
+    top:0;
+    z-index:10;
+}
+
+h1{
+    margin:0;
+    font-size:25px;
+}
+
+header p{
+    margin:5px 0 0;
+    color:#777;
+}
+
+main{
+    max-width:900px;
+    margin:auto;
+    padding:20px 14px 50px;
+}
+
+.controls{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+label{
+    display:block;
+    font-weight:600;
+    margin-bottom:6px;
+}
+
+select,
+input,
+button{
+    width:100%;
+    min-height:46px;
+    border:1px solid #ccc;
+    border-radius:10px;
+    background:#fff;
+    padding:10px;
+    font-size:16px;
+}
+
+.buttons{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:8px;
+    margin:15px 0;
+}
+
+button{
+    cursor:pointer;
+    font-weight:600;
+}
+
+.today{
+    background:#222;
+    color:white;
+}
+
+.date{
+    text-align:center;
+    margin:20px 0;
+}
+
+.date h2{
+    margin:0;
+    font-size:22px;
+}
+
+.date p{
+    margin:5px;
+    color:#777;
+}
+
+.countdown{
+    text-align:center;
+    background:#fff;
+    padding:13px;
+    border-radius:12px;
+    margin-bottom:15px;
+    font-weight:600;
+}
+
+.lesson{
+    display:grid;
+    grid-template-columns:70px 1fr;
+    gap:14px;
+    background:#fff;
+    border:1px solid #ddd;
+    border-radius:14px;
+    padding:15px;
+    margin-bottom:10px;
+}
+
+.number{
+    background:#f0f1f3;
+    border-radius:10px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+}
+
+.number strong{
+    font-size:22px;
+}
+
+.number small{
+    font-size:11px;
+    color:#666;
+    margin-top:4px;
+}
+
+.lesson h3{
+    margin:0 0 8px;
+    font-size:17px;
+}
+
+.info{
+    color:#666;
+    font-size:14px;
+    white-space:pre-line;
+}
+
+.empty{
+    background:#fff;
+    border-radius:14px;
+    padding:35px 15px;
+    text-align:center;
+    color:#777;
+}
+
+@media(max-width:600px){
+    .controls{
+        grid-template-columns:1fr;
+    }
+
+    .buttons{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .today{
+        grid-column:1/-1;
+        order:-1;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Расписание УИФ</h1>
+    <p>Учебное расписание</p>
+</header>
+
+<main>
+
+<div class="controls">
+
+    <div>
+        <label>Группа</label>
+        <select id="group">
+            <option>4301</option>
+            <option>4302</option>
+            <option>4303</option>
+        </select>
+    </div>
+
+    <div>
+        <label>Дата</label>
+        <input type="date" id="date">
+    </div>
+
+</div>
+
+<div class="buttons">
+
+    <button id="prev">
+        ← Предыдущий
+    </button>
+
+    <button class="today" id="today">
+        Сегодня
+    </button>
+
+    <button id="next">
+        Следующий →
+    </button>
+
+</div>
+
+<div class="date">
+    <h2 id="dateTitle">Расписание</h2>
+    <p id="groupTitle"></p>
+</div>
+
+<div class="countdown" id="countdown">
+    Загрузка...
+</div>
+
+<div id="schedule"></div>
+
+</main>
+
+<script>
+let scheduleData = {};
+
+fetch("data.json")
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Не удалось загрузить data.json");
+        }
+        return response.json();
+    })
+    .then(data => {
+        scheduleData = data;
+        loadSettings();
+        render();
+        updateCountdown();
+    })
+    .catch(error => {
+        console.error(error);
+
+        schedule.innerHTML = `
+            <div class="empty">
+                Не удалось загрузить расписание.<br><br>
+                Проверь, что файл <b>data.json</b>
+                находится рядом с index.html.
+            </div>
+        `;
+    });
+
+};
+    
+const groupSelect = document.getElementById("group");
+const dateInput = document.getElementById("date");
+const schedule = document.getElementById("schedule");
+const dateTitle = document.getElementById("dateTitle");
+const groupTitle = document.getElementById("groupTitle");
+const countdown = document.getElementById("countdown");
+
+const groups = ["4301", "4302", "4303"];
+
+groupSelect.addEventListener("change", render);
+dateInput.addEventListener("change", render);
+
+document.getElementById("prev").addEventListener("click", () => {
+    changeDate(-1);
+});
+
+document.getElementById("next").addEventListener("click", () => {
+    changeDate(1);
+});
+
+document.getElementById("today").addEventListener("click", () => {
+    const today = new Date();
+
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+
+    dateInput.value = `${y}-${m}-${d}`;
+    render();
+});
+
+function changeDate(days) {
+    const current = new Date(dateInput.value + "T12:00:00");
+
+    if (isNaN(current)) return;
+
+    current.setDate(current.getDate() + days);
+
+    const y = current.getFullYear();
+    const m = String(current.getMonth() + 1).padStart(2, "0");
+    const d = String(current.getDate()).padStart(2, "0");
+
+    dateInput.value = `${y}-${m}-${d}`;
+
+    render();
+}
+
+function formatDate(date) {
+    const parts = date.split("-");
+
+    if (parts.length !== 3) return date;
+
+    const names = [
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря"
+    ];
+
+    const year = parts[0];
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+
+    return `${day} ${names[month - 1]} ${year}`;
+}
+
+function render() {
+    const group = groupSelect.value;
+    const date = dateInput.value;
+
+    dateTitle.textContent = formatDate(date);
+    groupTitle.textContent = `Группа ${group}`;
+
+    const key = `${date}|${group}`;
+    const lessons = scheduleData[key];
+
+    schedule.innerHTML = "";
+
+    if (!lessons || lessons.length === 0) {
+        schedule.innerHTML = `
+            <div class="empty">
+                На этот день занятий нет
+            </div>
+        `;
+        return;
+    }
+
+    lessons.forEach(item => {
+        const lesson = document.createElement("div");
+        lesson.className = "lesson";
+
+        const text = item.text || "";
+        const lines = text.split("\n");
+
+        const title = lines[0] || "Занятие";
+        const teacher = lines.slice(1).join("\n");
+
+        lesson.innerHTML = `
+            <div class="number">
+                <strong>${item.lesson}</strong>
+                <small>пара</small>
+            </div>
+
+            <div>
+                <h3>${escapeHtml(title)}</h3>
+                <div class="info">
+                    ${escapeHtml(item.time || "")}
+                    ${teacher ? "<br>" + escapeHtml(teacher) : ""}
+                </div>
+            </div>
+        `;
+
+        schedule.appendChild(lesson);
+    });
+}
+
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function updateCountdown() {
+    const target = new Date("2026-12-24T00:00:00");
+    const now = new Date();
+
+    const diff = target - now;
+
+    if (diff <= 0) {
+        countdown.textContent = "24 декабря уже наступило 🎉";
+        return;
+    }
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+
+    countdown.textContent =
+        `До 24 декабря: ${days} дн. ${hours} ч. ${minutes} мин.`;
+}
+
+function setInitialDate() {
+    const savedDate = localStorage.getItem("scheduleDate");
+
+    if (savedDate) {
+        dateInput.value = savedDate;
+        return;
+    }
+
+    dateInput.value = "2026-09-01";
+}
+
+function saveSettings() {
+    localStorage.setItem("scheduleGroup", groupSelect.value);
+    localStorage.setItem("scheduleDate", dateInput.value);
+}
+
+function loadSettings() {
+    const savedGroup = localStorage.getItem("scheduleGroup");
+
+    if (savedGroup && groups.includes(savedGroup)) {
+        groupSelect.value = savedGroup;
+    }
+
+    setInitialDate();
+}
+
+groupSelect.addEventListener("change", saveSettings);
+dateInput.addEventListener("change", saveSettings);
+
+
+
+setInterval(updateCountdown, 60000);
